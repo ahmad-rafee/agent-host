@@ -4,6 +4,7 @@ using ModelContextProtocol.Client;
 using System.Text.Json;
 using AgentHost.Shared.Persistence;
 using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Concurrent;
 
 namespace AgentHost.Shared.Clients.McpClient;
 
@@ -11,8 +12,10 @@ public class SdkMcpClient : IMcpClient
 {
     private readonly ILogger<SdkMcpClient> _logger;
     private readonly McpClientOptions _options;
-    private McpClientContext? _client;
+    // Issue #1: transitioning to real ModelContextProtocol SDK clients per server (lazy). For now we keep a lightweight placeholder runtime object.
     private readonly SemaphoreSlim _initializationSemaphore = new(1, 1);
+    private IReadOnlyList<McpServer>? _enabledServers; // cached metadata (no processes yet)
+    private readonly ConcurrentDictionary<Guid, McpClientContext> _clients = new(); // serverId -> runtime (placeholder until SDK wired)
     private readonly IMcpServerRepository? _serverRepo;
     private readonly IMcpToolRepository? _toolRepo;
     private readonly IServiceScopeFactory? _scopeFactory; // for resolving scoped repos when running as singleton
@@ -40,24 +43,39 @@ public class SdkMcpClient : IMcpClient
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        if (_client != null) return;
-
+        if (_enabledServers != null) return;
         await _initializationSemaphore.WaitAsync(cancellationToken);
         try
         {
-            if (_client != null) return;
+            if (_enabledServers != null) return;
 
-            _logger.LogInformation("Initializing MCP client with {ServerCount} servers", _options.Servers.Count);
-
-            // For demo purposes, we'll create a mock client that simulates MCP responses
-            // In production, this would connect to real MCP servers
-            _client = await CreateMockMcpClientAsync(cancellationToken);
-
-            _logger.LogInformation("MCP client initialized successfully");
+            // Load enabled servers from DB (preferred path) else fallback to options config.
+            if (_serverRepo != null)
+            {
+                var servers = await _serverRepo.ListAsync(enabled: true, limit: 500, offset: 0);
+                _enabledServers = servers.ToList();
+                _logger.LogInformation("[MCP] Cached {ServerCount} enabled servers from DB", _enabledServers.Count);
+            }
+            else if (_scopeFactory != null)
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var repo = scope.ServiceProvider.GetRequiredService<IMcpServerRepository>();
+                var servers = await repo.ListAsync(enabled: true, limit: 500, offset: 0);
+                _enabledServers = servers.ToList();
+                _logger.LogInformation("[MCP] Cached {ServerCount} enabled servers (scoped) from DB", _enabledServers.Count);
+            }
+            else
+            {
+                // Fallback to static options (legacy mock path)
+                _enabledServers = _options.Servers.Select(kvp => new McpServer(
+                    Guid.NewGuid(), kvp.Key, kvp.Value.Type, kvp.Key, kvp.Value.Command, kvp.Value.Args, kvp.Value.Type == "http" ? kvp.Value.Command : null,
+                    kvp.Value.Env, true, "configured", null, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)).ToList();
+                _logger.LogInformation("[MCP] Cached {ServerCount} servers from configuration (mock)", _enabledServers.Count);
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to initialize MCP client");
+            _logger.LogError(ex, "[MCP] Failed to initialize server metadata cache");
             throw;
         }
         finally
@@ -69,18 +87,29 @@ public class SdkMcpClient : IMcpClient
     public async Task<McpResponse> CallToolAsync(string toolName, object? parameters = null, CancellationToken cancellationToken = default)
     {
         await InitializeAsync(cancellationToken);
-        
-        if (_client == null)
-        {
-            return new McpResponse(false, Error: "MCP client not initialized");
-        }
 
         try
         {
             _logger.LogDebug("Calling MCP tool {ToolName} with parameters {Parameters}", toolName, parameters);
+            // Determine server (prefix before first '.') to drive lazy runtime creation.
+            var serverKey = toolName.Contains('.') ? toolName.Split('.')[0] : null;
+            McpServer? server = null;
+            if (serverKey != null && _enabledServers != null)
+            {
+                server = _enabledServers.FirstOrDefault(s => s.Name.Equals(serverKey, StringComparison.OrdinalIgnoreCase));
+            }
+            if (server != null)
+            {
+                var runtime = _clients.GetOrAdd(server.Id, id =>
+                {
+                    _logger.LogInformation("[MCP] Spawning runtime for server {ServerName} ({ServerId})", server.Name, server.Id);
+                    // TODO(issue 001): Replace placeholder with real IMcpClient via McpClientFactory & StdioClientTransport
+                    return new McpClientContext();
+                });
+                // runtime currently unused (placeholder)
+            }
 
-            // For the PoC, simulate tool calls with mock responses
-            var result = await SimulateToolCallAsync(toolName, parameters, cancellationToken);
+            var result = await SimulateToolCallAsync(toolName, parameters, cancellationToken); // still mock until Issue 004
 
             _logger.LogDebug("MCP tool call completed successfully");
             
@@ -157,13 +186,7 @@ public class SdkMcpClient : IMcpClient
         }
     }
 
-    private async Task<McpClientContext> CreateMockMcpClientAsync(CancellationToken cancellationToken)
-    {
-        // In a real implementation, this would connect to actual MCP servers
-        // For the PoC, we return a mock context
-        await Task.Delay(100, cancellationToken); // Simulate connection setup
-        return new McpClientContext(); // This is a placeholder - the actual SDK would provide the real implementation
-    }
+    // NOTE: Previous single mock client removed; we now manage per-server runtimes lazily (placeholders until SDK integration).
 
     private async Task<object> SimulateToolCallAsync(string toolName, object? parameters, CancellationToken cancellationToken)
     {
@@ -328,7 +351,18 @@ public class SdkMcpClient : IMcpClient
 
     public void Dispose()
     {
-        _client?.Dispose();
+        foreach (var kvp in _clients)
+        {
+            try
+            {
+                kvp.Value.Dispose();
+                _logger.LogInformation("[MCP] Disposed runtime for server {ServerId}", kvp.Key);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[MCP] Error disposing runtime for server {ServerId}", kvp.Key);
+            }
+        }
         _initializationSemaphore.Dispose();
     }
 }

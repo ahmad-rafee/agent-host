@@ -1,0 +1,62 @@
+stages:
+  - build
+  - test
+
+variables:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+  NUGET_PACKAGES: "$CI_PROJECT_DIR/.nuget/packages"
+
+cache:
+  key: "nuget-cache"
+  paths:
+    - .nuget/packages
+
+.rules_default: &rules_default
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+build:dotnet:
+  stage: build
+  image: mcr.microsoft.com/dotnet/sdk:9.0
+  <<: *rules_default
+  script:
+    - dotnet restore AgentHost.PoC.sln
+    - dotnet build AgentHost.PoC.sln -c Release --no-restore
+  artifacts:
+    expire_in: 1 day
+    paths:
+      - src/**/bin/Release/
+      - tests/**/bin/Release/
+
+test:dotnet:
+  stage: test
+  image: mcr.microsoft.com/dotnet/sdk:9.0
+  needs: ["build:dotnet"]
+  <<: *rules_default
+  script:
+    - dotnet test AgentHost.PoC.sln -c Release --no-build \
+        /p:CollectCoverage=true \
+        /p:CoverletOutputFormat="cobertura,opencover" \
+        /p:CoverletOutput=TestResults/coverage/
+  artifacts:
+    when: always
+    paths:
+      - TestResults/**/*
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: TestResults/coverage/coverage.cobertura.xml
+  allow_failure: false
+
+# Potential future job for infra-backed acceptance tests:
+# acceptance:
+#   stage: test
+#   image: mcr.microsoft.com/dotnet/sdk:9.0
+#   services: []
+#   script:
+#     - make infra-up
+#     - dotnet test AgentHost.PoC.sln -c Release --no-build
+#   after_script:
+#     - make infra-down
