@@ -1,0 +1,3 @@
+-- Enable pgvector extension (optional for vector functionality)
+-- Uncomment the following line to enable vector support
+-- CREATE EXTENSION IF NOT EXISTS vector;

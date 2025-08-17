@@ -1,0 +1,30 @@
+model_list:
+  - model_name: chat-default
+    litellm_params:
+      model: gpt-3.5-turbo
+      api_key: ${OPENAI_API_KEY}
+  
+  - model_name: embed-default
+    litellm_params:
+      model: text-embedding-ada-002
+      api_key: ${OPENAI_API_KEY}
+
+  # Example configuration for local models
+  # - model_name: local-chat
+  #   litellm_params:
+  #     model: openai/microsoft-DialoGPT-medium
+  #     api_base: http://vllm:8000/v1
+
+general_settings:
+  master_key: poc-master-key-change-in-production
+  database_url: sqlite:///tmp/litellm.db
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+  
+router_settings:
+  routing_strategy: simple-shuffle
+  model_group_alias:
+    gpt-3.5-turbo: chat-default
+    text-embedding-ada-002: embed-default

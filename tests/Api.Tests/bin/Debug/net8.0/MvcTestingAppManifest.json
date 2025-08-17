@@ -1,0 +1,4 @@
+{
+  "AgentHost.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/workspaces\/agent-host\/src\/Api",
+  "AgentHost.Shared, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/workspaces\/agent-host\/src\/Shared"
+}

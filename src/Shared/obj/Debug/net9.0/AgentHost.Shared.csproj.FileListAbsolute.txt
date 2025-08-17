@@ -1,0 +1,12 @@
+/workspaces/agent-host/src/Shared/bin/Debug/net9.0/AgentHost.Shared.deps.json
+/workspaces/agent-host/src/Shared/bin/Debug/net9.0/AgentHost.Shared.dll
+/workspaces/agent-host/src/Shared/bin/Debug/net9.0/AgentHost.Shared.pdb
+/workspaces/agent-host/src/Shared/obj/Debug/net9.0/AgentHost.Shared.csproj.AssemblyReference.cache
+/workspaces/agent-host/src/Shared/obj/Debug/net9.0/AgentHost.Shared.GeneratedMSBuildEditorConfig.editorconfig
+/workspaces/agent-host/src/Shared/obj/Debug/net9.0/AgentHost.Shared.AssemblyInfoInputs.cache
+/workspaces/agent-host/src/Shared/obj/Debug/net9.0/AgentHost.Shared.AssemblyInfo.cs
+/workspaces/agent-host/src/Shared/obj/Debug/net9.0/AgentHost.Shared.csproj.CoreCompileInputs.cache
+/workspaces/agent-host/src/Shared/obj/Debug/net9.0/AgentHost.Shared.dll
+/workspaces/agent-host/src/Shared/obj/Debug/net9.0/refint/AgentHost.Shared.dll
+/workspaces/agent-host/src/Shared/obj/Debug/net9.0/AgentHost.Shared.pdb
+/workspaces/agent-host/src/Shared/obj/Debug/net9.0/ref/AgentHost.Shared.dll

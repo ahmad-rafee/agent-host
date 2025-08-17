@@ -1,0 +1,42 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentHost.Api", "src\Api\AgentHost.Api.csproj", "{A1234567-B123-C456-D789-123456789012}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentHost.Worker", "src\Worker\AgentHost.Worker.csproj", "{B1234567-B123-C456-D789-123456789012}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentHost.Shared", "src\Shared\AgentHost.Shared.csproj", "{C1234567-B123-C456-D789-123456789012}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentHost.Api.Tests", "tests\Api.Tests\AgentHost.Api.Tests.csproj", "{D1234567-B123-C456-D789-123456789012}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentHost.Worker.Tests", "tests\Worker.Tests\AgentHost.Worker.Tests.csproj", "{E1234567-B123-C456-D789-123456789012}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A1234567-B123-C456-D789-123456789012}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1234567-B123-C456-D789-123456789012}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1234567-B123-C456-D789-123456789012}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1234567-B123-C456-D789-123456789012}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B1234567-B123-C456-D789-123456789012}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B1234567-B123-C456-D789-123456789012}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B1234567-B123-C456-D789-123456789012}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B1234567-B123-C456-D789-123456789012}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C1234567-B123-C456-D789-123456789012}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C1234567-B123-C456-D789-123456789012}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C1234567-B123-C456-D789-123456789012}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C1234567-B123-C456-D789-123456789012}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D1234567-B123-C456-D789-123456789012}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D1234567-B123-C456-D789-123456789012}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D1234567-B123-C456-D789-123456789012}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D1234567-B123-C456-D789-123456789012}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E1234567-B123-C456-D789-123456789012}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E1234567-B123-C456-D789-123456789012}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E1234567-B123-C456-D789-123456789012}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E1234567-B123-C456-D789-123456789012}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

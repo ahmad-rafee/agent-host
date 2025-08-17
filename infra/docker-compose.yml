@@ -1,0 +1,132 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:14.3
+    environment:
+      POSTGRES_DB: agent
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: agent
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db-init.sql:/docker-entrypoint-initdb.d/db-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: miniouser
+      MINIO_ROOT_PASSWORD: miniopass
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  litellm:
+    image: ghcr.io/berriai/litellm:latest
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml
+    environment:
+      LITELLM_CONFIG: /app/config.yaml
+      LITELLM_LOG: INFO
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MCP Server Environment - provides Node.js runtime for MCP servers
+  mcp-servers:
+    image: node:18-alpine
+    command: tail -f /dev/null  # Keep container running for stdio MCP servers
+    volumes:
+      - ./mcp-config:/app/config
+      - mcp-workspace:/app/workspace
+    working_dir: /app
+    environment:
+      - NODE_ENV=development
+    # Install common MCP servers
+    entrypoint: |
+      sh -c "
+        npm install -g @modelcontextprotocol/server-filesystem @modelcontextprotocol/server-gmail @modelcontextprotocol/server-jira &&
+        tail -f /dev/null
+      "
+
+  # Uncomment to use local vLLM model
+  # vllm:
+  #   image: vllm/vllm-openai:latest
+  #   command: ["--model", "microsoft/DialoGPT-medium", "--port", "8000"]
+  #   ports:
+  #     - "8000:8000"
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - capabilities: ["gpu"]
+
+  api:
+    build:
+      context: ./src/Api
+      dockerfile: Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__Db=Host=postgres;Database=agent;Username=agent;Password=agent
+      - Storage__S3__Endpoint=http://minio:9000
+      - Storage__S3__Bucket=org-1-artifacts
+      - Llm__BaseUrl=http://litellm:4000
+      - Policy__ModelAllowlist__0=chat-default
+      - Mcp__UseMockResponses=false
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+      mcp-servers:
+        condition: service_started
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./src/Worker
+      dockerfile: Dockerfile
+    environment:
+      - ConnectionStrings__Db=Host=postgres;Database=agent;Username=agent;Password=agent
+      - Storage__S3__Endpoint=http://minio:9000
+      - Storage__S3__Bucket=org-1-artifacts
+      - Llm__BaseUrl=http://litellm:4000
+      - Mcp__UseMockResponses=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+      mcp-servers:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  minio:
+  mcp-workspace:
