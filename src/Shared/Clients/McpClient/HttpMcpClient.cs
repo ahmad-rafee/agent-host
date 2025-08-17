@@ -2,6 +2,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using System.Text.Json;
+using AgentHost.Shared.Persistence;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AgentHost.Shared.Clients.McpClient;
 
@@ -11,11 +13,29 @@ public class SdkMcpClient : IMcpClient
     private readonly McpClientOptions _options;
     private McpClientContext? _client;
     private readonly SemaphoreSlim _initializationSemaphore = new(1, 1);
+    private readonly IMcpServerRepository? _serverRepo;
+    private readonly IMcpToolRepository? _toolRepo;
+    private readonly IServiceScopeFactory? _scopeFactory; // for resolving scoped repos when running as singleton
 
     public SdkMcpClient(IConfiguration configuration, ILogger<SdkMcpClient> logger)
     {
         _logger = logger;
         _options = configuration.GetSection("Mcp").Get<McpClientOptions>() ?? new McpClientOptions();
+    }
+
+    // New constructor for DI with repositories (DB-backed listing)
+    public SdkMcpClient(IConfiguration configuration, ILogger<SdkMcpClient> logger, IMcpServerRepository serverRepo, IMcpToolRepository toolRepo)
+        : this(configuration, logger)
+    {
+        _serverRepo = serverRepo;
+        _toolRepo = toolRepo;
+    }
+
+    // New constructor: capture scope factory instead of scoped repos (avoids resolving scoped from root when singleton)
+    public SdkMcpClient(IConfiguration configuration, ILogger<SdkMcpClient> logger, IServiceScopeFactory scopeFactory)
+        : this(configuration, logger)
+    {
+        _scopeFactory = scopeFactory;
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -90,11 +110,45 @@ public class SdkMcpClient : IMcpClient
         {
             _logger.LogDebug("Listing available MCP tools");
 
-            // Return mock tools for PoC
-            var tools = GetMockTools();
-            
-            _logger.LogInformation("Found {ToolCount} MCP tools", tools.Count());
-            return tools;
+            // If repositories were injected directly OR we have a scope factory, resolve via whichever path is available
+            async Task<IEnumerable<McpTool>> LoadFromDbAsync(IMcpServerRepository serverRepo, IMcpToolRepository toolRepo)
+            {
+                var servers = await serverRepo.ListAsync(enabled: true, limit: 500, offset: 0);
+                var result = new List<McpTool>();
+                foreach (var server in servers)
+                {
+                    var tools = await toolRepo.ListByServerAsync(server.Id, includeDeleted: false, limit: 500, offset: 0);
+                    foreach (var t in tools.Where(t => !t.IsDeleted))
+                    {
+                        var json = JsonSerializer.Serialize(t.Schema);
+                        using var doc = JsonDocument.Parse(json);
+                        result.Add(new McpTool(
+                            t.Name,
+                            t.Description ?? string.Empty,
+                            doc.RootElement.Clone(),
+                            t.RequiredScopes));
+                    }
+                }
+                _logger.LogInformation("Found {ToolCount} MCP tools (DB)", result.Count);
+                return result;
+            }
+
+            if (_serverRepo != null && _toolRepo != null)
+            {
+                return await LoadFromDbAsync(_serverRepo, _toolRepo);
+            }
+            if (_scopeFactory != null)
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var sr = scope.ServiceProvider.GetRequiredService<IMcpServerRepository>();
+                var tr = scope.ServiceProvider.GetRequiredService<IMcpToolRepository>();
+                return await LoadFromDbAsync(sr, tr);
+            }
+
+            // Fallback to mock tools (legacy path/tests)
+            var mockTools = GetMockTools();
+            _logger.LogInformation("Found {ToolCount} MCP tools (mock)", mockTools.Count());
+            return mockTools;
         }
         catch (Exception ex)
         {
@@ -115,13 +169,36 @@ public class SdkMcpClient : IMcpClient
     {
         await Task.Delay(100, cancellationToken); // Simulate network call
 
-        return toolName switch
+        var normalized = Normalize(toolName);
+        return normalized switch
         {
-            McpTools.Gmail.ListMessages => SimulateGmailListMessages(parameters),
-            McpTools.Jira.CreateIssue => SimulateJiraCreateIssue(parameters),
-            McpTools.Filesystem.ReadFile => SimulateFileSystemRead(parameters),
+            "gmail.list_messages" => SimulateGmailListMessages(parameters),
+            "jira.create_issue" => SimulateJiraCreateIssue(parameters),
+            "fs.read_file" => SimulateFileSystemRead(parameters),
             _ => throw new ArgumentException($"Unknown tool: {toolName}")
         };
+    }
+
+    private static string Normalize(string name)
+    {
+        if (name.StartsWith("mcp."))
+        {
+            var parts = name.Split('.', 3);
+            if (parts.Length == 3)
+            {
+                var server = parts[1];
+                var action = parts[2];
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < action.Length; i++)
+                {
+                    var c = action[i];
+                    if (i > 0 && char.IsUpper(c)) sb.Append('_');
+                    sb.Append(char.ToLowerInvariant(c));
+                }
+                return $"{server}.{sb}";
+            }
+        }
+        return name;
     }
 
     private object SimulateGmailListMessages(object? parameters)
@@ -179,7 +256,7 @@ public class SdkMcpClient : IMcpClient
         return new[]
         {
             new McpTool(
-                McpTools.Gmail.ListMessages,
+                "gmail.list_messages",
                 "List Gmail messages based on query parameters",
                 JsonDocument.Parse("""
                 {
@@ -200,7 +277,7 @@ public class SdkMcpClient : IMcpClient
                 new[] { "email.read" }
             ),
             new McpTool(
-                McpTools.Jira.CreateIssue,
+                "jira.create_issue",
                 "Create a new Jira issue",
                 JsonDocument.Parse("""
                 {
@@ -230,7 +307,7 @@ public class SdkMcpClient : IMcpClient
                 new[] { "jira.write" }
             ),
             new McpTool(
-                McpTools.Filesystem.ReadFile,
+                "fs.read_file",
                 "Read contents of a file",
                 JsonDocument.Parse("""
                 {

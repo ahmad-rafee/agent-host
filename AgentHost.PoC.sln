@@ -12,6 +12,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentHost.Api.Tests", "test
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentHost.Worker.Tests", "tests\Worker.Tests\AgentHost.Worker.Tests.csproj", "{E1234567-B123-C456-D789-123456789012}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentHost.Acceptance.Tests", "tests\Acceptance.Tests\AgentHost.Acceptance.Tests.csproj", "{F1234567-B123-C456-D789-123456789012}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -38,5 +40,9 @@ Global
 		{E1234567-B123-C456-D789-123456789012}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E1234567-B123-C456-D789-123456789012}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E1234567-B123-C456-D789-123456789012}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F1234567-B123-C456-D789-123456789012}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F1234567-B123-C456-D789-123456789012}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F1234567-B123-C456-D789-123456789012}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F1234567-B123-C456-D789-123456789012}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

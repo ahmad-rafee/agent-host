@@ -1,0 +1,30 @@
+// Workspace MCP configuration.
+// NOTE: Do NOT hardcode your PAT here. The github_mcp_pat input prompts you securely.
+// Usage (VS Code / compatible host): it will ask for the PAT when starting the GitHub MCP server.
+// Provide a PAT with at least `repo` scope (or fine‑grained: Issues: Read/Write) to allow issue creation.
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "github_mcp_pat",
+      "description": "GitHub Personal Access Token (repo scope for issue creation)",
+      "password": true
+    }
+  ],
+  "servers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${input:github_mcp_pat}"
+      }
+    }
+    // Add additional MCP servers below if you want them available in the editor context.
+    // Example (stdio launch of a local MCP server):
+    // ,"local-mcp-server": {
+    //   "type": "stdio",
+    //   "command": "dotnet",
+    //   "args": ["run", "--project", "./path/to/YourMcpServer.csproj"]
+    // }
+  }
+}

@@ -4,6 +4,7 @@ using AgentHost.Shared.Persistence;
 using AgentHost.Shared.Policy;
 using AgentHost.Shared.Storage;
 using AgentHost.Api.Pipelines;
+using AgentHost.Shared.Discovery;
 
 namespace AgentHost.Api.Composition;
 
@@ -16,7 +17,11 @@ public static class ServiceRegistration
 
         // Add clients
         services.AddHttpClient<ILlmClient, LiteLlmClient>();
-        services.AddSingleton<IMcpClient, SdkMcpClient>();
+        // Register MCP client singleton using scope factory to avoid capturing scoped repositories directly
+        services.AddSingleton<IMcpClient>(sp => new SdkMcpClient(
+            sp.GetRequiredService<IConfiguration>(),
+            sp.GetRequiredService<ILogger<SdkMcpClient>>(),
+            sp.GetRequiredService<IServiceScopeFactory>()));
 
         // Add storage
         services.AddScoped<IBlobStorage, MinIOBlobStorage>();
@@ -26,6 +31,9 @@ public static class ServiceRegistration
 
         // Add pipeline registry
         services.AddSingleton<IPipelineRegistry, InMemoryPipelineRegistry>();
+
+    // Add MCP tool discovery (client). Audit logger provided by persistence layer (DB-backed)
+    services.AddSingleton<IMcpToolDiscovery, McpClientToolDiscovery>();
 
         return services;
     }

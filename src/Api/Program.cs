@@ -57,6 +57,7 @@ if (app.Environment.IsEnvironment("Testing"))
 app.MapHealthEndpoints();
 app.MapRunEndpoints();
 app.MapArtifactEndpoints();
+app.MapMcpEndpoints();
 
 app.Logger.LogInformation("AgentHost API starting on {Urls}", string.Join(", ", app.Urls));
 

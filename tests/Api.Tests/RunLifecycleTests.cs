@@ -23,7 +23,7 @@ public class RunLifecycleTests : IClassFixture<CustomWebApplicationFactory>
     [Fact]
     public async Task Run_WithStep_ShouldReturnStepInDetails()
     {
-        var createReq = new { pipelineName = "lifecycle-pipeline", pipelineSpec = new { steps = Array.Empty<object>() } };
+    var createReq = new { pipelineName = "test-pipeline", pipelineSpec = new { steps = Array.Empty<object>() } };
         var createResp = await _client.PostAsync("/runs", new StringContent(JsonSerializer.Serialize(createReq), Encoding.UTF8, "application/json"));
         createResp.StatusCode.Should().Be(HttpStatusCode.Created);
         var runJson = JsonSerializer.Deserialize<JsonElement>(await createResp.Content.ReadAsStringAsync());

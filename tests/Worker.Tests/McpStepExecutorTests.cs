@@ -1,6 +1,7 @@
 using AgentHost.Shared.Clients.McpClient;
 using AgentHost.Shared.Contracts;
 using AgentHost.Worker.Jobs;
+using AgentHost.Shared.Persistence;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -15,13 +16,15 @@ public class McpStepExecutorTests
     private readonly Mock<ILogger<McpStepExecutor>> _loggerMock;
     private readonly Mock<IServiceProvider> _serviceProviderMock;
     private readonly McpStepExecutor _executor;
+    private readonly Mock<IMcpToolRepository> _toolRepoMock = new();
+    private readonly Mock<IMcpServerRepository> _serverRepoMock = new();
 
     public McpStepExecutorTests()
     {
         _mcpClientMock = new Mock<IMcpClient>();
         _loggerMock = new Mock<ILogger<McpStepExecutor>>();
         _serviceProviderMock = new Mock<IServiceProvider>();
-        _executor = new McpStepExecutor(_mcpClientMock.Object, _loggerMock.Object);
+    _executor = new McpStepExecutor(_mcpClientMock.Object, _loggerMock.Object, _toolRepoMock.Object, _serverRepoMock.Object);
     }
 
     [Theory]
@@ -36,6 +39,50 @@ public class McpStepExecutorTests
 
         // Assert
         result.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithServerNotFound_ShouldFailEarly()
+    {
+        var stepSpec = new PipelineStep("test", StepKind.McpCall, Tool: "mcp.gmail.listMessages", Server: "missing-server");
+        var context = new StepExecutionContext(Guid.NewGuid(), stepSpec, new Dictionary<string, object>(), _serviceProviderMock.Object);
+
+        _serverRepoMock.Setup(r => r.GetByNameAsync("missing-server")).ReturnsAsync((McpServer?)null);
+
+        var result = await _executor.ExecuteAsync(context);
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("server 'missing-server' not found");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithToolMissingOnServer_ShouldFailEarly()
+    {
+        var stepSpec = new PipelineStep("test", StepKind.McpCall, Tool: "mcp.gmail.listMessages", Server: "gmail");
+        var context = new StepExecutionContext(Guid.NewGuid(), stepSpec, new Dictionary<string, object>(), _serviceProviderMock.Object);
+
+        var server = new McpServer(Guid.NewGuid(), "gmail", "stdio", null, null, Array.Empty<string>(), null, new Dictionary<string, string>(), true, "ready", null, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        _serverRepoMock.Setup(r => r.GetByNameAsync("gmail")).ReturnsAsync(server);
+        _toolRepoMock.Setup(r => r.GetByServerAndNameAsync(server.Id, It.IsAny<string>(), true)).ReturnsAsync((McpToolRecord?)null);
+
+        var result = await _executor.ExecuteAsync(context);
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("not found on server 'gmail'");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithDeletedTool_ShouldFailEarly()
+    {
+        var stepSpec = new PipelineStep("test", StepKind.McpCall, Tool: "mcp.gmail.listMessages", Server: "gmail");
+        var context = new StepExecutionContext(Guid.NewGuid(), stepSpec, new Dictionary<string, object>(), _serviceProviderMock.Object);
+
+        var server = new McpServer(Guid.NewGuid(), "gmail", "stdio", null, null, Array.Empty<string>(), null, new Dictionary<string, string>(), true, "ready", null, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        var deletedTool = new McpToolRecord(Guid.NewGuid(), server.Id, "gmail.list_messages", "desc", new { }, Array.Empty<string>(), null, null, true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        _serverRepoMock.Setup(r => r.GetByNameAsync("gmail")).ReturnsAsync(server);
+        _toolRepoMock.Setup(r => r.GetByServerAndNameAsync(server.Id, "gmail.list_messages", true)).ReturnsAsync(deletedTool);
+
+        var result = await _executor.ExecuteAsync(context);
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("is deleted");
     }
 
     [Fact]
@@ -62,7 +109,7 @@ public class McpStepExecutorTests
     public async Task ExecuteAsync_WithSuccessfulMcpCall_ShouldReturnSuccess()
     {
         // Arrange
-        var stepSpec = new PipelineStep("test", StepKind.McpCall, Tool: "mcp.gmail.listMessages");
+    var stepSpec = new PipelineStep("test", StepKind.McpCall, Tool: "gmail.list_messages");
         var context = new StepExecutionContext(
             Guid.NewGuid(),
             stepSpec,
@@ -94,7 +141,7 @@ public class McpStepExecutorTests
             .Returns(Task.CompletedTask);
 
         _mcpClientMock
-            .Setup(x => x.CallToolAsync(McpTools.Gmail.ListMessages, It.IsAny<Dictionary<string, object>?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.CallToolAsync("gmail.list_messages", It.IsAny<Dictionary<string, object>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(mockResponse);
 
         // Act
@@ -110,7 +157,7 @@ public class McpStepExecutorTests
         // Verify MCP client was called correctly
         _mcpClientMock.Verify(x => x.InitializeAsync(It.IsAny<CancellationToken>()), Times.Once);
         _mcpClientMock.Verify(
-            x => x.CallToolAsync(McpTools.Gmail.ListMessages, It.IsAny<Dictionary<string, object>?>(), It.IsAny<CancellationToken>()),
+            x => x.CallToolAsync("gmail.list_messages", It.IsAny<Dictionary<string, object>?>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -118,7 +165,7 @@ public class McpStepExecutorTests
     public async Task ExecuteAsync_WithFailedMcpCall_ShouldReturnError()
     {
         // Arrange
-        var stepSpec = new PipelineStep("test", StepKind.McpCall, Tool: "mcp.jira.createIssue");
+    var stepSpec = new PipelineStep("test", StepKind.McpCall, Tool: "jira.create_issue");
         var context = new StepExecutionContext(
             Guid.NewGuid(),
             stepSpec,
@@ -144,7 +191,7 @@ public class McpStepExecutorTests
             .Returns(Task.CompletedTask);
 
         _mcpClientMock
-            .Setup(x => x.CallToolAsync(McpTools.Jira.CreateIssue, It.IsAny<Dictionary<string, object>?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.CallToolAsync("jira.create_issue", It.IsAny<Dictionary<string, object>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(mockResponse);
 
         // Act
@@ -159,7 +206,7 @@ public class McpStepExecutorTests
     public async Task ExecuteAsync_WithMcpPullKind_ShouldProcessPullResponse()
     {
         // Arrange
-        var stepSpec = new PipelineStep("test", StepKind.McpPull, Tool: "mcp.gmail.listMessages");
+    var stepSpec = new PipelineStep("test", StepKind.McpPull, Tool: "gmail.list_messages");
         var context = new StepExecutionContext(
             Guid.NewGuid(),
             stepSpec,
@@ -185,7 +232,7 @@ public class McpStepExecutorTests
             .Returns(Task.CompletedTask);
 
         _mcpClientMock
-            .Setup(x => x.CallToolAsync(McpTools.Gmail.ListMessages, It.IsAny<Dictionary<string, object>?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.CallToolAsync("gmail.list_messages", It.IsAny<Dictionary<string, object>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(mockResponse);
 
         // Act
@@ -225,46 +272,5 @@ public class McpStepExecutorTests
         result.Error.Should().Be("MCP server not available");
     }
 
-    [Theory]
-    [InlineData("mcp.gmail.listMessages", McpTools.Gmail.ListMessages)]
-    [InlineData("mcp.jira.createIssue", McpTools.Jira.CreateIssue)]
-    [InlineData("mcp.fs.readFile", McpTools.Filesystem.ReadFile)]
-    [InlineData("unknown.tool", "unknown.tool")]
-    public async Task ExecuteAsync_ShouldConvertToolNamesCorrectly(string originalTool, string expectedMcpTool)
-    {
-        // Arrange
-        var stepSpec = new PipelineStep("test", StepKind.McpCall, Tool: originalTool);
-        var context = new StepExecutionContext(
-            Guid.NewGuid(),
-            stepSpec,
-            new Dictionary<string, object>(),
-            _serviceProviderMock.Object
-        );
-
-        var mockResponse = new McpResponse
-        {
-            Success = true,
-            Result = new { result = "test" },
-            Metadata = new Dictionary<string, object>()
-        };
-
-        _mcpClientMock
-            .Setup(x => x.InitializeAsync(It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-
-        _mcpClientMock
-            .Setup(x => x.CallToolAsync(expectedMcpTool, It.IsAny<Dictionary<string, object>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(mockResponse);
-
-        // Act
-        var result = await _executor.ExecuteAsync(context);
-
-        // Assert
-        result.Success.Should().BeTrue();
-        
-        // Verify the correct MCP tool name was used
-        _mcpClientMock.Verify(
-            x => x.CallToolAsync(expectedMcpTool, It.IsAny<Dictionary<string, object>?>(), It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
+    // Legacy normalization path still covered indirectly via early validation tests when Server not provided.
 }

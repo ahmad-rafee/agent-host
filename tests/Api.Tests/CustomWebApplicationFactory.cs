@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using AgentHost.Shared.Discovery;
+using AgentHost.Shared.Persistence;
 
 namespace AgentHost.Api.Tests;
 
@@ -25,7 +27,13 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         builder.UseUrls("http://127.0.0.1:0");
 
         builder.ConfigureServices(services => {
-            // nothing yet
+            // Override IMcpToolDiscovery with deterministic stub for integration tests
+            var existing = services.FirstOrDefault(d => d.ServiceType == typeof(IMcpToolDiscovery));
+            if (existing != null)
+            {
+                services.Remove(existing);
+            }
+            services.AddSingleton<IMcpToolDiscovery, StubMcpToolDiscovery>();
         });
     }
 

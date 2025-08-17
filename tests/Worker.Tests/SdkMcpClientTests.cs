@@ -54,7 +54,7 @@ public class SdkMcpClientTests
     {
         // Arrange
         await _client.InitializeAsync();
-        var toolName = McpTools.Gmail.ListMessages;
+    var toolName = "gmail.list_messages";
         var parameters = new Dictionary<string, object>
         {
             ["query"] = "from:test@example.com",
@@ -78,7 +78,7 @@ public class SdkMcpClientTests
     {
         // Arrange
         await _client.InitializeAsync();
-        var toolName = McpTools.Jira.CreateIssue;
+    var toolName = "jira.create_issue";
         var parameters = new Dictionary<string, object>
         {
             ["projectKey"] = "PROJ",
@@ -105,7 +105,7 @@ public class SdkMcpClientTests
     {
         // Arrange
         await _client.InitializeAsync();
-        var toolName = McpTools.Filesystem.ReadFile;
+    var toolName = "fs.read_file";
         var parameters = new Dictionary<string, object>
         {
             ["path"] = "/app/workspace/test.txt"
@@ -144,7 +144,7 @@ public class SdkMcpClientTests
     {
         // Arrange
         await _client.InitializeAsync();
-        var toolName = McpTools.Gmail.ListMessages;
+    var toolName = "gmail.list_messages";
 
         // Act
         var response = await _client.CallToolAsync(toolName, null);
@@ -165,9 +165,9 @@ public class SdkMcpClientTests
 
         // Assert
         tools.Should().NotBeEmpty();
-        tools.Should().Contain(tool => tool.Name == McpTools.Gmail.ListMessages);
-        tools.Should().Contain(tool => tool.Name == McpTools.Jira.CreateIssue);
-        tools.Should().Contain(tool => tool.Name == McpTools.Filesystem.ReadFile);
+    tools.Should().Contain(tool => tool.Name == "gmail.list_messages");
+    tools.Should().Contain(tool => tool.Name == "jira.create_issue");
+    tools.Should().Contain(tool => tool.Name == "fs.read_file");
         
         // Verify all tools have descriptions
         tools.Should().AllSatisfy(tool => 
@@ -178,9 +178,9 @@ public class SdkMcpClientTests
     }
 
     [Theory]
-    [InlineData(McpTools.Gmail.ListMessages, true)]
-    [InlineData(McpTools.Jira.CreateIssue, true)]
-    [InlineData(McpTools.Filesystem.ReadFile, true)]
+    [InlineData("gmail.list_messages", true)]
+    [InlineData("jira.create_issue", true)]
+    [InlineData("fs.read_file", true)]
     [InlineData("unknown.tool", false)]
     public void McpTools_IsKnownTool_ShouldReturnCorrectResult(string toolName, bool expected)
     {
@@ -199,14 +199,22 @@ public class SdkMcpClientTests
 
         // Assert
         allTools.Should().NotBeEmpty();
-        allTools.Should().Contain(McpTools.Gmail.ListMessages);
-        allTools.Should().Contain(McpTools.Jira.CreateIssue);
-        allTools.Should().Contain(McpTools.Filesystem.ReadFile);
-        allTools.Should().Contain(McpTools.Slack.SendMessage);
-        allTools.Should().Contain(McpTools.GitHub.CreateIssue);
-        
-        // All tools should be unique
-        allTools.Should().OnlyHaveUniqueItems();
+        allTools.Should().Contain("gmail.list_messages");
+        allTools.Should().Contain("jira.create_issue");
+        allTools.Should().Contain("fs.read_file");
+        allTools.Should().Contain("slack.send_message");
+    allTools.Should().Contain("github.create_issue");
+    allTools.Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public async Task ExecuteToolBackwardCompat_LegacyName_ShouldSucceed()
+    {
+        // legacy prefix + PascalCase segment should normalize to gmail.list_messages
+        var legacyName = "mcp.gmail.ListMessages";
+    await _client.InitializeAsync();
+    var response = await _client.CallToolAsync(legacyName, new Dictionary<string, object?>());
+    response.Success.Should().BeTrue();
     }
 
     [Fact]
